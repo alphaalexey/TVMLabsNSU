@@ -1,3 +1,32 @@
 Arithmetic {
-    // write rules here
+    Expr = Add
+
+    addOp
+        = "+" | "-"
+
+    Add
+        = Mul (addOp Mul)*
+
+    mulOp
+        = "*" | "/"
+
+    Mul
+        = Unary (mulOp Unary)*
+
+    Unary
+        = "-" Unary  -- neg
+        | Atom
+
+    Atom
+        = number        -- num
+        | variable      -- var
+        | "(" Expr ")"  -- parens
+
+    variable = letter alnum*
+
+    nonZeroDigit = "1".."9"
+
+    number
+        = "0"                  -- zero
+        | nonZeroDigit digit*  -- nz
 }
