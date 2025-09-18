@@ -1,3 +1,21 @@
 AddMul {
- // Write the rules here
+    Expr = Add
+
+    Add
+        = Mul "+" Add  -- plus
+        | Mul
+
+    Mul
+        = Atom "*" Mul  -- times
+        | Atom
+
+    Atom
+        = number        -- num
+        | "(" Expr ")"  -- parens
+
+    nonZeroDigit = "1".."9"
+
+    number
+        = "0"                  -- zero
+        | nonZeroDigit digit*  -- nz
 }
