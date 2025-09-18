@@ -1,6 +1,6 @@
 import { test } from '../../mark';
 import { evaluate, maxStackDepth, SyntaxError } from '../src';
-  
+
 describe('testing addition and multiplication', () => {
     test("Empty expression is invalid", 3, evaluate, SyntaxError, "");
     test("Number is a valid expression", 3, evaluate, 42, "42");
@@ -15,7 +15,6 @@ describe('testing addition and multiplication', () => {
         35 
         7 +`);
     test("Multiple additions are valid", 3, evaluate, 42, "5 4 3 ++ 2+ 1+ 2 3 + 4+5+6+7+ +");
-    
     test("Multiplication is a valid expression", 3, evaluate, 42, "6 7 *");
     test("Incomplete multiplication is invalid", 3, evaluate, SyntaxError, "42 *");
     test("Standalone * is invalid", 3, evaluate, SyntaxError, "* 42");
