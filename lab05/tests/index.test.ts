@@ -28,15 +28,16 @@ describe('testing subtraction and division', () => {
     test("Associativity is preserved across addition and subtraction", 4, parseCompileAndExecute, 3, "5+2-4");
     test("Associativity can be overriden via parentheses (1)", 4, parseCompileAndExecute, 5, "5+(2-4)+(3-1)");
     test("Associativity can be overriden via parentheses (2)", 4, parseCompileAndExecute, -1, "(5+2)-(4+3)-1");
-    
     test("Division is supported", 3, parseCompileAndExecute, 2, "42/21");
     test("Division is left-associative", 4, parseCompileAndExecute, 1, "8/4/2");
     test("Division by zero gets runtime error", 3, parseCompileAndExecute, WebAssembly.RuntimeError, "1/0");
 });
+
 describe('testing unary negation', () => {
     test("unary minus is supported", 3, parseCompileAndExecute, 42, "43+-1");
     test("double unary minus is supported", 3, parseCompileAndExecute, 42, "41--1");
 });
+
 describe('testing variables', () => {
     test("variables can be used", 3, parseCompileAndExecute, 42, "x+1", 41);
     test("undefined variables yield RuntimeError", 4, parseCompileAndExecute, WebAssembly.RuntimeError, "x+y");
