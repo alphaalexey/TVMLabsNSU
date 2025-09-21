@@ -7,13 +7,13 @@ export const basicIdentities = () => parseIdentities([
     ["x-0", "x"],
     ["x-x", "0"],
     ["x*1", "x"],
-    ["x+x", "2*x"], // ?
+    ["x+x", "2*x"],
     ["x/1", "x"],
     ["x--y", "x+y"]
 ]);
 
 export const commutativeIdentities = () => [
-    ...basicIdentities(), 
+    ...basicIdentities(),
     ...parseIdentities([
         ["x+y", "y+x"],
         ["x*y", "y*x"],
@@ -30,6 +30,7 @@ export const toughIdentities = () => [
 const distributiveIdentities = () => parseIdentities([
     ["a*(b+c)", "a*b + a*c"],
 ]);
+
 const regroupIdentities = () => parseIdentities([
     ["a+(b+c)", "b+(c+a)"],
 ]);
