@@ -11,5 +11,5 @@ export const rpnCalc = {
 
     Expr_times(a, b, _star) {
         return a.calculate() * b.calculate();
-    }
+    },
 } satisfies ReversePolishNotationActionDict<number>;
