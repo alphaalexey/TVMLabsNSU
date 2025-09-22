@@ -3,37 +3,41 @@ import grammar, { ArithmeticActionDict, ArithmeticSemantics } from "./arith.ohm-
 
 export const arithSemantics: ArithSemantics = grammar.createSemantics() as ArithSemantics;
 
+function foldChain(
+    this: any,
+    first: any,
+    operators: any,
+    rest: any,
+    step: (acc: number, op: string, rhs: number) => number
+): number {
+    const params = this.args.params as { [name: string]: number };
+    let acc = first.calculate(params);
+    const n = operators.children.length;
+    for (let i = 0; i < n; i++) {
+        const op = operators.child(i).sourceString as string;
+        const rhs = rest.child(i).calculate(params);
+        acc = step(acc, op, rhs);
+    }
+    return acc;
+}
+
 const arithCalc = {
     Expr(e) {
         return e.calculate(this.args.params);
     },
 
     Add(first, operators, rest) {
-        let acc = first.calculate(this.args.params);
-        const n = operators.children.length;
-        for (let i = 0; i < n; i++) {
-            const op = operators.child(i).sourceString;
-            const rhs = rest.child(i).calculate(this.args.params);
-            acc = op === "+" ? acc + rhs : acc - rhs;
-        }
-        return acc;
+        return foldChain.call(this, first, operators, rest, (acc, op, rhs) =>
+            op === "+" ? acc + rhs : acc - rhs
+        );
     },
 
     Mul(first, operators, rest) {
-        let acc = first.calculate(this.args.params);
-        const n = operators.children.length;
-        for (let i = 0; i < n; i++) {
-            const op = operators.child(i).sourceString;
-            const rhs = rest.child(i).calculate(this.args.params);
-            if (op === "*")
-                acc *= rhs;
-            else if (rhs === 0) {
-                throw new Error("Division by zero");
-            } else {
-                acc /= rhs;
-            }
-        }
-        return acc;
+        return foldChain.call(this, first, operators, rest, (acc, op, rhs) => {
+            if (op === "*") return acc * rhs;
+            if (rhs === 0) throw new Error("Division by zero");
+            return acc / rhs;
+        });
     },
 
     Unary_neg(_minus, u) {
@@ -54,7 +58,7 @@ const arithCalc = {
 
     Atom_parens(_open, e, _close) {
         return e.calculate(this.args.params);
-    }
+    },
 } satisfies ArithmeticActionDict<number | undefined>;
 
 arithSemantics.addOperation<number>("calculate(params)", arithCalc);
