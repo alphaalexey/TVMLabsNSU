@@ -1,4 +1,4 @@
-import { BufferedEmitter, c, N } from "../../wasm";
+import { BufferedEmitter, c, I32, I64, N, Op, Void } from "../../wasm";
 
 export type Fn<R> = (...args: any[]) => R;
 

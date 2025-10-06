@@ -41,6 +41,7 @@ describe('testing subtraction and division', () => {
 describe('testing unary negation', () => {
     test("unary minus is supported", 3, evaluate, 42, "43+-1");
     test("double unary minus is supported", 4, evaluate, 42, "41--1");
+    test("Unary minus supports spaces properly", 4, evaluate, 42, "43 - - -1");
 });
 
 describe('testing variables', () => {
