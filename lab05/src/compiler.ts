@@ -56,16 +56,7 @@ function wasm(e: Expr, args: string[]): Op<I32> {
         case "bin": {
             const L = wasm(e.left, args);
             const R = wasm(e.right, args);
-            switch (e.op) {
-                case "+":
-                    return i32.add(L, R);
-                case "-":
-                    return i32.sub(L, R);
-                case "*":
-                    return i32.mul(L, R);
-                case "/":
-                    return i32.div_s(L, R);
-            }
+            return { '+': i32.add, '-': i32.sub, '*': i32.mul, '/': i32.div_s }[e.op](L, R);
         }
     }
 }
