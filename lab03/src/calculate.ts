@@ -3,41 +3,27 @@ import grammar, { ArithmeticActionDict, ArithmeticSemantics } from "./arith.ohm-
 
 export const arithSemantics: ArithSemantics = grammar.createSemantics() as ArithSemantics;
 
-function foldChain(
-    this: any,
-    first: any,
-    operators: any,
-    rest: any,
-    step: (acc: number, op: string, rhs: number) => number
-): number {
-    const params = this.args.params as { [name: string]: number };
-    let acc = first.calculate(params);
-    const n = operators.children.length;
-    for (let i = 0; i < n; i++) {
-        const op = operators.child(i).sourceString as string;
-        const rhs = rest.child(i).calculate(params);
-        acc = step(acc, op, rhs);
-    }
-    return acc;
-}
-
 const arithCalc = {
     Expr(e) {
         return e.calculate(this.args.params);
     },
 
     Add(first, operators, rest) {
-        return foldChain.call(this, first, operators, rest, (acc, op, rhs) =>
-            op === "+" ? acc + rhs : acc - rhs
-        );
+        const base = first.calculate(this.args.params);
+        return operators.children
+            .map((_, i) => [operators.child(i).sourceString, rest.child(i).calculate(this.args.params)])
+            .reduce((acc, [op, rhs]) => op === '+' ? acc + rhs : acc - rhs, base);
     },
 
     Mul(first, operators, rest) {
-        return foldChain.call(this, first, operators, rest, (acc, op, rhs) => {
-            if (op === "*") return acc * rhs;
-            if (rhs === 0) throw new Error("Division by zero");
-            return acc / rhs;
-        });
+        const base = first.calculate(this.args.params);
+        return operators.children
+            .map((_, i) => [operators.child(i).sourceString, rest.child(i).calculate(this.args.params)])
+            .reduce((acc, [op, rhs]) => {
+                if (op === '*') return acc * rhs;
+                if (rhs === 0) throw new Error('Division by zero');
+                return acc / rhs;
+            }, base);
     },
 
     Unary_neg(_minus, u) {
