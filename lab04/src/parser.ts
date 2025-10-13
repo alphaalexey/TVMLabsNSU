@@ -8,25 +8,17 @@ export const getExprAst: ArithmeticActionDict<Expr> = {
     },
 
     Add(first, operators, rest) {
-        let acc: Expr = first.parse();
-        const n = operators.children.length;
-        for (let i = 0; i < n; i++) {
-            const op = operators.child(i).sourceString as '+' | '-';
-            const rhs: Expr = rest.child(i).parse();
-            acc = { type: 'bin', op, left: acc, right: rhs };
-        }
-        return acc;
+        const base: Expr = first.parse();
+        return operators.children
+            .map((_, i) => [operators.child(i).sourceString as '+' | '-', rest.child(i).parse() as Expr] as const)
+            .reduce<Expr>((left, [op, right]) => ({ type: 'bin', op, left, right }), base);
     },
 
     Mul(first, operators, rest) {
-        let acc: Expr = first.parse();
-        const n = operators.children.length;
-        for (let i = 0; i < n; i++) {
-            const op = operators.child(i).sourceString as '*' | '/';
-            const rhs: Expr = rest.child(i).parse();
-            acc = { type: 'bin', op, left: acc, right: rhs };
-        }
-        return acc;
+        const base: Expr = first.parse();
+        return operators.children
+            .map((_, i) => [operators.child(i).sourceString as '*' | '/', rest.child(i).parse() as Expr] as const)
+            .reduce<Expr>((left, [op, right]) => ({ type: 'bin', op, left, right }), base);
     },
 
     Unary_neg(_minus, u) {
