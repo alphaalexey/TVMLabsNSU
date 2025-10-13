@@ -1,6 +1,6 @@
-import { Expr } from "../../lab04";
+import { Expr, Bin } from "../../lab04";
 
-type Op = '+' | '-' | '*' | '/';
+type Op = Bin["op"];
 
 const num = (n: number): Expr => ({ type: 'num', value: n });
 const neg = (e: Expr): Expr => ({ type: 'neg', arg: e });
@@ -50,7 +50,7 @@ function simplify(e: Expr): Expr {
 
         case 'neg': {
             const a = simplify(e.arg);
-            if (a.type === 'neg') return simplify(a.arg);
+            if (a.type === 'neg') return a.arg;
             if (a.type === 'num') return num(a.value === 0 ? 0 : -a.value);
             if (a.type === 'bin' && a.op === '/') {
                 if (a.left.type === 'neg') return bin('/', a.left.arg, a.right);
