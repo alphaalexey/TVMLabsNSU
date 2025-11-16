@@ -26,10 +26,6 @@ const arithCalc = {
             }, base);
     },
 
-    Unary_neg(_minus, u) {
-        return -u.calculate(this.args.params);
-    },
-
     Atom_num(n) {
         return parseInt(n.sourceString, 10);
     },
@@ -40,6 +36,10 @@ const arithCalc = {
             return NaN;
         }
         return this.args.params[name];
+    },
+
+    Atom_unary_minus(_minus, a) {
+        return -a.calculate(this.args.params);
     },
 
     Atom_parens(_open, e, _close) {

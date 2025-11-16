@@ -11,15 +11,12 @@ Arithmetic {
         = "*" | "/"
 
     Mul
-        = Unary (mulOp Unary)*
-
-    Unary
-        = "-" Unary  -- neg
-        | Atom
+        = Atom (mulOp Atom)*
 
     Atom
         = number        -- num
         | variable      -- var
+        | "-" Atom      -- unary_minus
         | "(" Expr ")"  -- parens
 
     variable = letter alnum*
