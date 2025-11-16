@@ -17,7 +17,8 @@ export function addIntGroup(e: any, groups: {[key: string]: string;}, groupName:
 export function testFilesInFolder(folder: string, parseFunc: (source: string)=>any) {
     let files = readdirSync(folder, { withFileTypes: true, recursive: true });
     for (const file of files) {
-        const filePathString = pathJoin(file.parentPath, file.name);
+        const basePath = file.parentPath ?? folder;
+        const filePathString = pathJoin(basePath, file.name);
         const filePath = pathParse(filePathString);
 
         if (!file.isDirectory() && filePath.ext == ".funny") {
