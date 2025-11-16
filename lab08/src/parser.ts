@@ -35,23 +35,12 @@ function declareVar(env: VarEnv, name: string, what: string): void {
     env.add(name);
 }
 
-function ensureBothSingle(
-    leftCount: number,
-    rightCount: number,
+function ensureSingleValues(
+    counts: number[],
     code: ErrorCode,
     message: string
 ): void {
-    if (leftCount !== 1 || rightCount !== 1) {
-        fail(code, message);
-    }
-}
-
-function ensureSingleValue(
-    count: number,
-    code: ErrorCode,
-    message: string
-): void {
-    if (count !== 1) {
+    if (counts.some((c) => c !== 1)) {
         fail(code, message);
     }
 }
@@ -69,16 +58,21 @@ function ensureArgCount(
     }
 }
 
-function parseOptionalNode<T>(node: any): T | null {
-    return node.children.length > 0
-        ? (node.child(0).parse() as T)
-        : null;
+function ensureDeclared(
+    env: VarEnv,
+    name: string,
+    code: ErrorCode,
+    messagePrefix: string
+): void {
+    if (!env.has(name)) {
+        fail(code, `${messagePrefix} "${name}".`);
+    }
 }
 
-function parseOptionalList<T>(node: any): T[] {
+function parseOptional<T>(node: any, fallback: T): T {
     return node.children.length > 0
-        ? (node.child(0).parse() as T[])
-        : [];
+        ? (node.child(0).parse() as T)
+        : fallback;
 }
 
 function checkModule(mod: ast.Module): void {
@@ -160,15 +154,21 @@ function checkStmt(stmt: ast.Statement, env: VarEnv, funEnv: FunEnv): void {
 function checkLValue(lv: ast.LValue, env: VarEnv, funEnv: FunEnv): void {
     switch (lv.type) {
         case "lvar":
-            if (!env.has(lv.name)) {
-                fail(ErrorCode.AssignUndeclaredVar, `Assignment to undeclared variable "${lv.name}".`);
-            }
+            ensureDeclared(
+                env,
+                lv.name,
+                ErrorCode.AssignUndeclaredVar,
+                "Assignment to undeclared variable"
+            );
             return;
 
         case "larr":
-            if (!env.has(lv.name)) {
-                fail(ErrorCode.AssignUndeclaredArray, `Assignment to undeclared array "${lv.name}".`);
-            }
+            ensureDeclared(
+                env,
+                lv.name,
+                ErrorCode.AssignUndeclaredArray,
+                "Assignment to undeclared array"
+            );
             checkExpr(lv.index, env, funEnv);
             return;
     }
@@ -185,8 +185,8 @@ function checkFuncCall(
         ensureArgCount("length", 1, args.length);
 
         const argCount = checkExpr(args[0], env, funEnv);
-        ensureSingleValue(
-            argCount,
+        ensureSingleValues(
+            [argCount],
             ErrorCode.ArgumentMultiValue,
             "Function arguments must be single-valued."
         );
@@ -206,8 +206,8 @@ function checkFuncCall(
 
     for (const a of args) {
         const c = checkExpr(a, env, funEnv);
-        ensureSingleValue(
-            c,
+        ensureSingleValues(
+            [c],
             ErrorCode.ArgumentMultiValue,
             "Function arguments must be single-valued."
         );
@@ -222,12 +222,12 @@ function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
             return 1;
 
         case "var":
-            if (!env.has(e.name)) {
-                fail(
-                    ErrorCode.UseUndeclaredVar,
-                    `Use of undeclared variable "${e.name}".`
-                );
-            }
+            ensureDeclared(
+                env,
+                e.name,
+                ErrorCode.UseUndeclaredVar,
+                "Use of undeclared variable"
+            );
             return 1;
 
         case "neg":
@@ -236,9 +236,8 @@ function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
         case "bin": {
             const lCount = checkExpr(e.left, env, funEnv);
             const rCount = checkExpr(e.right, env, funEnv);
-            ensureBothSingle(
-                lCount,
-                rCount,
+            ensureSingleValues(
+                [lCount, rCount],
                 ErrorCode.OperatorMultiValue,
                 "Operators can only be applied to single-valued expressions."
             );
@@ -249,15 +248,15 @@ function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
             return checkFuncCall(e, env, funEnv);
 
         case "arraccess": {
-            if (!env.has(e.name)) {
-                fail(
-                    ErrorCode.AccessUndeclaredArray,
-                    `Access to undeclared array "${e.name}".`
-                );
-            }
+            ensureDeclared(
+                env,
+                e.name,
+                ErrorCode.AccessUndeclaredArray,
+                "Access to undeclared array"
+            );
             const idxCount = checkExpr(e.index, env, funEnv);
-            ensureSingleValue(
-                idxCount,
+            ensureSingleValues(
+                [idxCount],
                 ErrorCode.ArrayIndexMultiValue,
                 "Array index expression must produce exactly one value."
             );
@@ -279,9 +278,8 @@ function checkCondition(
         case "comparison": {
             const lCount = checkExpr(cond.left, env, funEnv);
             const rCount = checkExpr(cond.right, env, funEnv);
-            ensureBothSingle(
-                lCount,
-                rCount,
+            ensureSingleValues(
+                [lCount, rCount],
                 ErrorCode.ComparisonMultiValue,
                 "Comparison operands must be single-valued."
             );
@@ -363,7 +361,7 @@ export const getFunnyAst = {
             name: name.sourceString,
             parameters: params.parse() as ast.ParameterDef[],
             returns: retSpec.parse() as ast.ParameterDef[],
-            locals: parseOptionalList<ast.ParameterDef>(usesOpt),
+            locals: parseOptional<ast.ParameterDef[]>(usesOpt, []),
             body: stmt.parse() as ast.Statement,
         };
         return fun;
@@ -427,7 +425,7 @@ export const getFunnyAst = {
         return {
             type: "while",
             condition: cond.parse() as ast.Condition,
-            invariant: parseOptionalNode<ast.Predicate>(invOpt),
+            invariant: parseOptional<ast.Predicate | null>(invOpt, null),
             body: body.parse() as ast.Statement,
         } as ast.WhileStmt;
     },
@@ -441,7 +439,7 @@ export const getFunnyAst = {
             type: "if",
             condition: cond.parse() as ast.Condition,
             then: thenStmt.parse() as ast.Statement,
-            else: parseOptionalNode<ast.Statement>(elseStmtOpt),
+            else: parseOptional<ast.Statement | null>(elseStmtOpt, null),
         } as ast.IfStmt;
     },
 
@@ -660,21 +658,21 @@ interface FunnyActionsExt {
 
 export function parseFunny(source: string): ast.Module {
     const match: MatchResult = grammar.Funny.match(source, "Module");
+
     if (match.failed()) {
         const m: any = match;
-        let startLine: number | undefined;
-        let startCol: number | undefined;
+        const pos =
+            typeof m.getRightmostFailurePosition === "function"
+                ? m.getRightmostFailurePosition()
+                : null;
 
-        if (typeof m.getRightmostFailurePosition === "function") {
-            const pos = m.getRightmostFailurePosition();
-            if (pos) {
-                startLine = pos.lineNum;
-                startCol = pos.colNum;
-            }
-        }
+        const message: string =
+            m.message ?? "Syntax error in Funny module.";
 
-        const message: string = m.message ?? "Syntax error in Funny module.";
-        fail(ErrorCode.ParseError, message, { startLine, startCol });
+        fail(ErrorCode.ParseError, message, {
+            startLine: pos?.lineNum,
+            startCol: pos?.colNum,
+        });
     }
 
     const mod = (semantics as FunnySemanticsExt)(match).parse();
