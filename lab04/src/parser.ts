@@ -21,16 +21,16 @@ export const getExprAst: ArithmeticActionDict<Expr> = {
             .reduce<Expr>((left, [op, right]) => ({ type: 'bin', op, left, right }), base);
     },
 
-    Unary_neg(_minus, u) {
-        return { type: 'neg', arg: u.parse() } as Expr;
-    },
-
     Atom_num(n) {
         return { type: 'num', value: parseInt(n.sourceString, 10) } as Expr;
     },
 
     Atom_var(v) {
         return { type: 'var', name: v.sourceString } as Expr;
+    },
+
+    Atom_unary_minus(_minus, a) {
+        return { type: 'neg', arg: a.parse() } as Expr;
     },
 
     Atom_parens(_open, e, _close) {
