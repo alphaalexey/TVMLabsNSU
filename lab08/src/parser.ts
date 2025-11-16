@@ -7,12 +7,7 @@ import grammar, { FunnyActionDict } from './funny.ohm-bundle';
 import { MatchResult, Semantics } from 'ohm-js';
 
 function collectList<T>(node: any): T[] {
-    const it = node.asIteration();
-    const result: T[] = [];
-    for (const child of it.children) {
-        result.push(child.parse());
-    }
-    return result;
+    return node.asIteration().children.map((c: any) => c.parse() as T);
 }
 
 type FunEnv = Record<string, ast.FunctionDef>;
@@ -25,15 +20,65 @@ type PosInfo = {
     endCol?: number;
 };
 
-function fail(code: string, message: string, pos: PosInfo = {}): never {
-    throw new FunnyError(
-        message,
-        code,
-        pos.startLine,
-        pos.startCol,
-        pos.endCol,
-        pos.endLine
-    );
+function fail(code: ErrorCode, message: string, pos: PosInfo = {}): never {
+    const { startLine, startCol, endLine, endCol } = pos;
+    throw new FunnyError(message, code, startLine, startCol, endCol, endLine);
+}
+
+function declareVar(env: VarEnv, name: string, what: string): void {
+    if (env.has(name)) {
+        fail(
+            ErrorCode.Redeclaration,
+            `Redeclaration of ${what} "${name}".`
+        );
+    }
+    env.add(name);
+}
+
+function ensureBothSingle(
+    leftCount: number,
+    rightCount: number,
+    code: ErrorCode,
+    message: string
+): void {
+    if (leftCount !== 1 || rightCount !== 1) {
+        fail(code, message);
+    }
+}
+
+function ensureSingleValue(
+    count: number,
+    code: ErrorCode,
+    message: string
+): void {
+    if (count !== 1) {
+        fail(code, message);
+    }
+}
+
+function ensureArgCount(
+    name: string,
+    expected: number,
+    actual: number
+): void {
+    if (actual !== expected) {
+        fail(
+            ErrorCode.ArgumentCount,
+            `Argument count mismatch when calling "${name}": got ${actual}, expected ${expected}.`
+        );
+    }
+}
+
+function parseOptionalNode<T>(node: any): T | null {
+    return node.children.length > 0
+        ? (node.child(0).parse() as T)
+        : null;
+}
+
+function parseOptionalList<T>(node: any): T[] {
+    return node.children.length > 0
+        ? (node.child(0).parse() as T[])
+        : [];
 }
 
 function checkModule(mod: ast.Module): void {
@@ -41,7 +86,7 @@ function checkModule(mod: ast.Module): void {
 
     for (const fn of mod.functions) {
         if (funEnv[fn.name]) {
-            fail("E_DUPLICATE_FUNCTION", `Duplicate function '${fn.name}'.`);
+            fail(ErrorCode.DuplicateFunction, `Duplicate function "${fn.name}".`);
         }
         funEnv[fn.name] = fn;
     }
@@ -54,23 +99,16 @@ function checkModule(mod: ast.Module): void {
 function checkFunction(fn: ast.FunctionDef, funEnv: FunEnv): void {
     const env: VarEnv = new Set<string>();
 
-    const add = (name: string, what: string) => {
-        if (env.has(name)) {
-            fail("E_REDECLARATION", `Redeclaration of ${what} '${name}'.`);
-        }
-        env.add(name);
-    };
-
     for (const p of fn.parameters) {
-        add(p.name, "parameter");
+        declareVar(env, p.name, "parameter");
     }
 
     for (const r of fn.returns) {
-        add(r.name, "return value");
+        declareVar(env, r.name, "return value");
     }
 
     for (const l of fn.locals) {
-        add(l.name, "local variable");
+        declareVar(env, l.name, "local variable");
     }
 
     checkStmt(fn.body, env, funEnv);
@@ -89,10 +127,7 @@ function checkStmt(stmt: ast.Statement, env: VarEnv, funEnv: FunEnv): void {
             }
             const needed = stmt.targets.length;
             if (produced !== needed) {
-                fail(
-                    "E_ASSIGN_ARITY",
-                    `Assignment arity mismatch: ${needed} target(s) but ${produced} value(s) on right-hand side.`
-                );
+                fail(ErrorCode.AssignArity, `Assignment arity mismatch: ${needed} target(s) but ${produced} value(s) on right-hand side.`);
             }
             return;
         }
@@ -126,23 +161,59 @@ function checkLValue(lv: ast.LValue, env: VarEnv, funEnv: FunEnv): void {
     switch (lv.type) {
         case "lvar":
             if (!env.has(lv.name)) {
-                fail(
-                    "E_ASSIGN_UNDECLARED_VAR",
-                    `Assignment to undeclared variable '${lv.name}'.`
-                );
+                fail(ErrorCode.AssignUndeclaredVar, `Assignment to undeclared variable "${lv.name}".`);
             }
             return;
 
         case "larr":
             if (!env.has(lv.name)) {
-                fail(
-                    "E_ASSIGN_UNDECLARED_ARRAY",
-                    `Assignment to undeclared array '${lv.name}'.`
-                );
+                fail(ErrorCode.AssignUndeclaredArray, `Assignment to undeclared array "${lv.name}".`);
             }
             checkExpr(lv.index, env, funEnv);
             return;
     }
+}
+
+function checkFuncCall(
+    call: ast.FuncCallExpr,
+    env: VarEnv,
+    funEnv: FunEnv
+): number {
+    const { name, args } = call;
+
+    if (name === "length") {
+        ensureArgCount("length", 1, args.length);
+
+        const argCount = checkExpr(args[0], env, funEnv);
+        ensureSingleValue(
+            argCount,
+            ErrorCode.ArgumentMultiValue,
+            "Function arguments must be single-valued."
+        );
+
+        return 1;
+    }
+
+    const fn = funEnv[name];
+    if (!fn) {
+        fail(
+            ErrorCode.UnknownFunction,
+            `Call to unknown function "${name}".`
+        );
+    }
+
+    ensureArgCount(name, fn.parameters.length, args.length);
+
+    for (const a of args) {
+        const c = checkExpr(a, env, funEnv);
+        ensureSingleValue(
+            c,
+            ErrorCode.ArgumentMultiValue,
+            "Function arguments must be single-valued."
+        );
+    }
+
+    return fn.returns.length;
 }
 
 function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
@@ -153,8 +224,8 @@ function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
         case "var":
             if (!env.has(e.name)) {
                 fail(
-                    "E_USE_UNDECLARED_VAR",
-                    `Use of undeclared variable '${e.name}'.`
+                    ErrorCode.UseUndeclaredVar,
+                    `Use of undeclared variable "${e.name}".`
                 );
             }
             return 1;
@@ -165,78 +236,33 @@ function checkExpr(e: ast.Expr, env: VarEnv, funEnv: FunEnv): number {
         case "bin": {
             const lCount = checkExpr(e.left, env, funEnv);
             const rCount = checkExpr(e.right, env, funEnv);
-            if (lCount !== 1 || rCount !== 1) {
-                fail(
-                    "E_OPERATOR_MULTI_VALUE",
-                    "Operators can only be applied to single-valued expressions."
-                );
-            }
+            ensureBothSingle(
+                lCount,
+                rCount,
+                ErrorCode.OperatorMultiValue,
+                "Operators can only be applied to single-valued expressions."
+            );
             return 1;
         }
 
-        case "funccall": {
-            if (e.name === "length") {
-                if (e.args.length !== 1) {
-                    fail(
-                        "E_ARGUMENT_COUNT",
-                        `Argument count mismatch when calling 'length': got ${e.args.length}, expected 1.`
-                    );
-                }
+        case "funccall":
+            return checkFuncCall(e, env, funEnv);
 
-                const argCount = checkExpr(e.args[0], env, funEnv);
-                if (argCount !== 1) {
-                    fail(
-                        "E_ARGUMENT_MULTI_VALUE",
-                        "Function arguments must be single-valued."
-                    );
-                }
-
-                return 1;
-            }
-
-            const fn = funEnv[e.name];
-            if (!fn) {
-                fail(
-                    "E_UNKNOWN_FUNCTION",
-                    `Call to unknown function '${e.name}'.`
-                );
-            }
-
-            if (e.args.length !== fn.parameters.length) {
-                fail(
-                    "E_ARGUMENT_COUNT",
-                    `Argument count mismatch when calling '${e.name}': got ${e.args.length}, expected ${fn.parameters.length}.`
-                );
-            }
-
-            const argCounts = e.args.map((a) => checkExpr(a, env, funEnv));
-            for (const c of argCounts) {
-                if (c !== 1) {
-                    fail(
-                        "E_ARGUMENT_MULTI_VALUE",
-                        "Function arguments must be single-valued."
-                    );
-                }
-            }
-
-            return fn.returns.length;
-        }
-
-        case "arraccess":
+        case "arraccess": {
             if (!env.has(e.name)) {
                 fail(
-                    "E_ACCESS_UNDECLARED_ARRAY",
-                    `Access to undeclared array '${e.name}'.`
+                    ErrorCode.AccessUndeclaredArray,
+                    `Access to undeclared array "${e.name}".`
                 );
             }
             const idxCount = checkExpr(e.index, env, funEnv);
-            if (idxCount !== 1) {
-                fail(
-                    "E_ARRAY_INDEX_MULTI_VALUE",
-                    "Array index expression must produce exactly one value."
-                );
-            }
+            ensureSingleValue(
+                idxCount,
+                ErrorCode.ArrayIndexMultiValue,
+                "Array index expression must produce exactly one value."
+            );
             return 1;
+        }
     }
 }
 
@@ -253,12 +279,12 @@ function checkCondition(
         case "comparison": {
             const lCount = checkExpr(cond.left, env, funEnv);
             const rCount = checkExpr(cond.right, env, funEnv);
-            if (lCount !== 1 || rCount !== 1) {
-                fail(
-                    "E_COMPARISON_MULTI_VALUE",
-                    "Comparison operands must be single-valued."
-                );
-            }
+            ensureBothSingle(
+                lCount,
+                rCount,
+                ErrorCode.ComparisonMultiValue,
+                "Comparison operands must be single-valued."
+            );
             return;
         }
 
@@ -279,11 +305,51 @@ function checkCondition(
     }
 }
 
+function foldLogicalChain<T>(
+    first: any,
+    rest: any,
+    makeNode: (left: T, right: T) => T
+): T {
+    let node = first.parse() as T;
+    for (const r of rest.children) {
+        const rhs = r.parse() as T;
+        node = makeNode(node, rhs);
+    }
+    return node;
+}
+
+function repeatPrefix<T>(
+    nots: any,
+    base: any,
+    makeNode: (inner: T) => T
+): T {
+    let node = base.parse() as T;
+    for (let i = 0; i < nots.children.length; i++) {
+        node = makeNode(node);
+    }
+    return node;
+}
+
+function makeComparisonNode(
+    leftNode: any,
+    rightNode: any,
+    op: ast.ComparisonCond["op"]
+): ast.ComparisonCond {
+    return {
+        kind: "comparison",
+        left: leftNode.parse() as ast.Expr,
+        op,
+        right: rightNode.parse() as ast.Expr,
+    };
+}
+
 export const getFunnyAst = {
     ...(getExprAst as any),
 
     Module(funcs) {
-        const functions = funcs.children.map((f: any) => f.parse() as ast.FunctionDef);
+        const functions = funcs.children.map(
+            (f: any) => f.parse() as ast.FunctionDef
+        );
         const mod: ast.Module = {
             type: "module",
             functions,
@@ -292,22 +358,12 @@ export const getFunnyAst = {
     },
 
     Function(name, _lp, params, _rp, _preOpt, retSpec, _postOpt, usesOpt, stmt) {
-        let parameters: ast.ParameterDef[] = [];
-        parameters = params.parse() as ast.ParameterDef[];
-
-        const returns = retSpec.parse() as ast.ParameterDef[];
-
-        let locals: ast.ParameterDef[] = [];
-        if (usesOpt.children.length > 0) {
-            locals = usesOpt.child(0).parse() as ast.ParameterDef[];
-        }
-
         const fun: ast.FunctionDef = {
             type: "fun",
             name: name.sourceString,
-            parameters,
-            returns,
-            locals,
+            parameters: params.parse() as ast.ParameterDef[],
+            returns: retSpec.parse() as ast.ParameterDef[],
+            locals: parseOptionalList<ast.ParameterDef>(usesOpt),
             body: stmt.parse() as ast.Statement,
         };
         return fun;
@@ -354,11 +410,10 @@ export const getFunnyAst = {
     },
 
     Block(_lb, stmts, _rb) {
-        const node: ast.BlockStmt = {
+        return {
             type: "block",
             stmts: stmts.children.map((s: any) => s.parse() as ast.Statement),
-        };
-        return node;
+        } as ast.BlockStmt;
     },
 
     Stmt_expr(e, _semi) {
@@ -369,53 +424,41 @@ export const getFunnyAst = {
     },
 
     While(_while, _lp, cond, _rp, invOpt, body) {
-        let invariant: ast.Predicate | null = null;
-        if (invOpt.children.length > 0) {
-            invariant = invOpt.child(0).parse() as ast.Predicate;
-        }
-        const node: ast.WhileStmt = {
+        return {
             type: "while",
             condition: cond.parse() as ast.Condition,
-            invariant,
+            invariant: parseOptionalNode<ast.Predicate>(invOpt),
             body: body.parse() as ast.Statement,
-        };
-        return node;
+        } as ast.WhileStmt;
     },
 
     InvariantSpec(_inv, pred) {
         return pred.parse() as ast.Predicate;
     },
 
-    If(_if, _lp, cond, _rp, thenStmt, elseKwOpt, elseStmtOpt) {
-        let elseBranch: ast.Statement | null = null;
-        if (elseStmtOpt.children.length > 0) {
-            elseBranch = elseStmtOpt.child(0).parse() as ast.Statement;
-        }
-        const node: ast.IfStmt = {
+    If(_if, _lp, cond, _rp, thenStmt, _elseKwOpt, elseStmtOpt) {
+        return {
             type: "if",
             condition: cond.parse() as ast.Condition,
             then: thenStmt.parse() as ast.Statement,
-            else: elseBranch,
-        };
-        return node;
+            else: parseOptionalNode<ast.Statement>(elseStmtOpt),
+        } as ast.IfStmt;
     },
 
     Assign_tuple(lvalues, _eq, exprs, _semi) {
-        const node: ast.AssignStmt = {
+        return {
             type: "assign",
             targets: lvalues.parse() as ast.LValue[],
             exprs: exprs.parse() as ast.Expr[],
-        };
-        return node;
+        } as ast.AssignStmt;
     },
 
     Assign_simple(lvalue, _eq, expr, _semi) {
-        const node: ast.AssignStmt = {
+        return {
             type: "assign",
             targets: [lvalue.parse() as ast.LValue],
             exprs: [expr.parse() as ast.Expr],
-        };
-        return node;
+        } as ast.AssignStmt;
     },
 
     LValueList(list) {
@@ -427,35 +470,27 @@ export const getFunnyAst = {
     },
 
     LValue_array(arr) {
-        const nameNode = arr.child(0);
-        const indexNode = arr.child(2);
-        const node: ast.ArrLValue = {
+        const access = arr.parse() as ast.ArrAccessExpr;
+        return {
             type: "larr",
-            name: nameNode.sourceString,
-            index: indexNode.parse() as ast.Expr,
-        };
-        return node;
+            name: access.name,
+            index: access.index,
+        } as ast.ArrLValue;
     },
 
     LValue_var(name) {
-        const node: ast.VarLValue = {
+        return {
             type: "lvar",
             name: name.sourceString,
-        };
-        return node;
+        } as ast.VarLValue;
     },
 
-    FunctionCall(name, _lp, argsOpt, _rp) {
-        let args: ast.Expr[] = [];
-        if (argsOpt.children.length > 0) {
-            args = argsOpt.parse() as ast.Expr[];
-        }
-        const node: ast.FuncCallExpr = {
+    FunctionCall(name, _lp, argsNode, _rp) {
+        return {
             type: "funccall",
             name: name.sourceString,
-            args,
-        };
-        return node;
+            args: argsNode.parse() as ast.Expr[],
+        } as ast.FuncCallExpr;
     },
 
     ArrayAccess(name, _lb, index, _rb) {
@@ -467,51 +502,34 @@ export const getFunnyAst = {
     },
 
     ImplyCond_imply(orCond, _arrow, rest) {
-        const left = orCond.parse() as ast.Condition;
-        const right = rest.parse() as ast.Condition;
-        const node: ast.ImpliesCond = {
+        return {
             kind: "implies",
-            left,
-            right,
-        };
-        return node;
+            left: orCond.parse() as ast.Condition,
+            right: rest.parse() as ast.Condition,
+        } as ast.ImpliesCond;
     },
 
     OrCond(first, _ops, rest) {
-        let node = first.parse() as ast.Condition;
-        for (const r of rest.children) {
-            const rhs = r.parse() as ast.Condition;
-            node = {
-                kind: "or",
-                left: node,
-                right: rhs,
-            } as ast.OrCond;
-        }
-        return node;
+        return foldLogicalChain<ast.Condition>(first, rest, (left, right) => ({
+            kind: "or",
+            left,
+            right,
+        } as ast.OrCond));
     },
 
     AndCond(first, _ops, rest) {
-        let node = first.parse() as ast.Condition;
-        for (const r of rest.children) {
-            const rhs = r.parse() as ast.Condition;
-            node = {
-                kind: "and",
-                left: node,
-                right: rhs,
-            } as ast.AndCond;
-        }
-        return node;
+        return foldLogicalChain<ast.Condition>(first, rest, (left, right) => ({
+            kind: "and",
+            left,
+            right,
+        } as ast.AndCond));
     },
 
     NotCond(nots, atom) {
-        let node = atom.parse() as ast.Condition;
-        for (let i = 0; i < nots.children.length; i++) {
-            node = {
-                kind: "not",
-                condition: node,
-            } as ast.NotCond;
-        }
-        return node;
+        return repeatPrefix<ast.Condition>(nots, atom, (condition) => ({
+            kind: "not",
+            condition,
+        } as ast.NotCond));
     },
 
     AtomCond_true(_t) {
@@ -530,57 +548,27 @@ export const getFunnyAst = {
     },
 
     Comparison_eq(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: "==" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, "==");
     },
 
     Comparison_neq(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: "!=" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, "!=");
     },
 
     Comparison_ge(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: ">=" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, ">=");
     },
 
     Comparison_le(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: "<=" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, "<=");
     },
 
     Comparison_gt(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: ">" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, ">");
     },
 
     Comparison_lt(left, _op, right) {
-        return {
-            kind: "comparison",
-            left: left.parse() as ast.Expr,
-            op: "<" as const,
-            right: right.parse() as ast.Expr,
-        } as ast.ComparisonCond;
+        return makeComparisonNode(left, right, "<");
     },
 
     ImplyPred_imply(orPred, _arrow, rest) {
@@ -591,49 +579,34 @@ export const getFunnyAst = {
             kind: "not",
             predicate: left,
         };
-        const node: ast.OrPred = {
+        return {
             kind: "or",
             left: notLeft,
             right,
-        };
-        return node;
+        } as ast.OrPred;
     },
 
     OrPred(first, _ops, rest) {
-        let node = first.parse() as ast.Predicate;
-        for (const r of rest.children) {
-            const rhs = r.parse() as ast.Predicate;
-            node = {
-                kind: "or",
-                left: node,
-                right: rhs,
-            } as ast.OrPred;
-        }
-        return node;
+        return foldLogicalChain<ast.Predicate>(first, rest, (left, right) => ({
+            kind: "or",
+            left,
+            right,
+        } as ast.OrPred));
     },
 
     AndPred(first, _ops, rest) {
-        let node = first.parse() as ast.Predicate;
-        for (const r of rest.children) {
-            const rhs = r.parse() as ast.Predicate;
-            node = {
-                kind: "and",
-                left: node,
-                right: rhs,
-            } as ast.AndPred;
-        }
-        return node;
+        return foldLogicalChain<ast.Predicate>(first, rest, (left, right) => ({
+            kind: "and",
+            left,
+            right,
+        } as ast.AndPred));
     },
 
     NotPred(nots, atom) {
-        let node = atom.parse() as ast.Predicate;
-        for (let i = 0; i < nots.children.length; i++) {
-            node = {
-                kind: "not",
-                predicate: node,
-            } as ast.NotPred;
-        }
-        return node;
+        return repeatPrefix<ast.Predicate>(nots, atom, (predicate) => ({
+            kind: "not",
+            predicate,
+        } as ast.NotPred));
     },
 
     AtomPred_true(_t) {
@@ -645,11 +618,10 @@ export const getFunnyAst = {
     },
 
     AtomPred_paren(_lp, pred, _rp) {
-        const node: ast.ParenPred = {
+        return {
             kind: "paren",
             inner: pred.parse() as ast.Predicate,
-        };
-        return node;
+        } as ast.ParenPred;
     },
 
     Quantifier(qTok, _lp, paramNode, _bar, body, _rp) {
@@ -658,29 +630,22 @@ export const getFunnyAst = {
         const typeNode = paramNode.child(2);
         const varName = identNode.sourceString;
         const varType = typeNode.parse() as "int" | "int[]";
-        const node: ast.Quantifier = {
+        return {
             kind: "quantifier",
             quant,
             varName,
             varType,
             body: body.parse() as ast.Predicate,
-        };
-        return node;
+        } as ast.Quantifier;
     },
 
-    FormulaRef(name, _lp, paramsOpt, _rp) {
-        let parameters: ast.ParameterDef[] = [];
-        if (paramsOpt.children.length > 0) {
-            parameters = paramsOpt.parse() as ast.ParameterDef[];
-        }
-        const node: ast.FormulaRef = {
+    FormulaRef(name, _lp, params, _rp) {
+        return {
             kind: "formula",
             name: name.sourceString,
-            parameters,
-        };
-        return node;
+            parameters: params.parse() as ast.ParameterDef[],
+        } as ast.FormulaRef;
     },
-
 } satisfies FunnyActionDict<any>;
 
 export const semantics: FunnySemanticsExt = grammar.Funny.createSemantics() as FunnySemanticsExt;
@@ -709,7 +674,7 @@ export function parseFunny(source: string): ast.Module {
         }
 
         const message: string = m.message ?? "Syntax error in Funny module.";
-        fail("E_PARSE_ERROR", message, { startLine, startCol });
+        fail(ErrorCode.ParseError, message, { startLine, startCol });
     }
 
     const mod = (semantics as FunnySemanticsExt)(match).parse();
