@@ -28,9 +28,10 @@ export const toughIdentities = () => [
 ]
 
 const distributiveIdentities = () => parseIdentities([
-    ["a*(b+c)", "a*b + a*c"],
+    ["a*(b+c)", "a*b + a*c"]
 ]);
 
 const regroupIdentities = () => parseIdentities([
     ["a+(b+c)", "b+(c+a)"],
+    ["a+(b-c)", "b+(-c+a)"]
 ]);
