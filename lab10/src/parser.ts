@@ -3,6 +3,7 @@ import { MatchResult, Semantics } from 'ohm-js';
 import grammar, { FunnierActionDict } from './funnier.ohm-bundle';
 
 import { AnnotatedModule } from './funnier';
+import { parseFunny } from '../../lab08';
 
 const getFunnierAst = {
     // write rules here
@@ -10,17 +11,14 @@ const getFunnierAst = {
 
 export const semantics: FunnySemanticsExt = grammar.Funnier.createSemantics() as FunnySemanticsExt;
 semantics.addOperation("parse()", getFunnierAst);
-export interface FunnySemanticsExt extends Semantics
-{
+export interface FunnySemanticsExt extends Semantics {
     (match: MatchResult): FunnyActionsExt
 }
 
-interface FunnyActionsExt 
-{
+interface FunnyActionsExt {
     parse(): AnnotatedModule;
 }
 
-export function parseFunnier(source: string, origin?: string): AnnotatedModule
-{
-    throw "Not implemented";
+export function parseFunnier(source: string): AnnotatedModule {
+    return parseFunny(source);
 }
