@@ -9,7 +9,8 @@ import { join as pathJoin, parse as pathParse} from 'path';
 export function testFilesInFolderAsync(folder: string, parseFunc: (name: string, source: string)=>Promise<any>) {
     let files = readdirSync(folder, { withFileTypes: true, recursive: true });
     for (const file of files) {
-        const filePathString = pathJoin(file.parentPath, file.name);
+        const basePath = file.parentPath ?? folder;
+        const filePathString = pathJoin(basePath, file.name);
         const filePath = pathParse(filePathString);
 
         if (!file.isDirectory() && filePath.ext == ".funny") {

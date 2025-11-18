@@ -6,15 +6,13 @@ import { parseAndCompile } from "../src";
 const sampleDir = "./lab08/samples";
 
 
-async function testOneResult<T = number>(fileName: string, funcName: string, ...args: number[]): Promise<T>
-{
-    const module = await parseAndCompile(fileName, readFileSync(pathJoin(sampleDir, fileName+'.funny'), 'utf-8'));
+async function testOneResult<T = number>(fileName: string, funcName: string, ...args: number[]): Promise<T> {
+    const module = await parseAndCompile(fileName, readFileSync(pathJoin(sampleDir, fileName + '.funny'), 'utf-8'));
     return module[funcName](...args);
 }
 
-async function testTwoResults<T = number>(fileName: string, funcName: string, ...args: number[]): Promise<[T, T]>
-{
-    const module = await parseAndCompile(fileName, readFileSync(pathJoin(sampleDir, fileName+'.funny'), 'utf-8'));
+async function testTwoResults<T = number>(fileName: string, funcName: string, ...args: number[]): Promise<[T, T]> {
+    const module = await parseAndCompile(fileName, readFileSync(pathJoin(sampleDir, fileName + '.funny'), 'utf-8'));
     return module[funcName](...args);
 }
 
@@ -29,5 +27,3 @@ describe('Testing the sample programs', () => {
     test('two results', 4, testTwoResults<number>, [6, 0], '4.divide', 'divide', 42, 7);
     test('conditional', 4, testOneResult<number>, 7, '4.gcd', 'gcd', 42, 49);
 });
-
-

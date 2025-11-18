@@ -2,6 +2,7 @@ import { parseVerifyAndCompile } from "../src";
 import { flushZ3 } from '../src/verifier';
 import { testFilesInFolderAsync } from "./testFilesInFolderAsync";
 
+
 describe('11. Testing the correct samples', () => {
     testFilesInFolderAsync("./lab10/samples", parseVerifyAndCompile);
 });
@@ -10,5 +11,3 @@ describe('11. Testing the incorrect samples', () => {
 });
 
 afterAll(() => flushZ3())
-
-

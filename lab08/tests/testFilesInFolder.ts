@@ -1,20 +1,20 @@
 import { desiredMark } from '../../desiredMark.json';
 import { DesiredMark } from '../../mark';
-import { 
-    readFileSync, 
-    readdirSync  } from 'fs';
-import { join as pathJoin, parse as pathParse} from 'path';
+import {
+    readFileSync,
+    readdirSync
+} from 'fs';
+import { join as pathJoin, parse as pathParse } from 'path';
 export const sampleDir = "./lab08/samples";
 
 export const testRe = /^(?<mark>[^\.]+)\.(?<name>.*?)($|(?<error>\.Error\.(?<startLine>\d+)?(\.(?<startCol>\d+)((-(?<endLine>\d+)\.)?(?<endCol>\d+))?)?))/;
 
-export function addIntGroup(e: any, groups: {[key: string]: string;}, groupName: string)
-{
-    if(groups[groupName])
+export function addIntGroup(e: any, groups: { [key: string]: string; }, groupName: string) {
+    if (groups[groupName])
         e[groupName] = parseInt(groups[groupName]);
 }
 
-export function testFilesInFolder(folder: string, parseFunc: (source: string)=>any) {
+export function testFilesInFolder(folder: string, parseFunc: (source: string) => any) {
     let files = readdirSync(folder, { withFileTypes: true, recursive: true });
     for (const file of files) {
         const basePath = file.parentPath ?? folder;
