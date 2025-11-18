@@ -146,7 +146,7 @@ function compileExpr(expr: Expr, locals: LocalEnv, functionIndexMap: FunIndexMap
 
         default: {
             const _never: never = expr as never;
-            throw new Error(`Unknown expression node ${( _never as any).type}`);
+            throw new Error(`Unknown expression node ${(_never as any).type}`);
         }
     }
 }
@@ -191,7 +191,7 @@ function compileLValue(lvalue: LValue, locals: LocalEnv, functionIndexMap: FunIn
 
         default: {
             const _never: never = lvalue as never;
-            throw new Error(`Unknown lvalue node ${( _never as any).type}`);
+            throw new Error(`Unknown lvalue node ${(_never as any).type}`);
         }
     }
 }
@@ -210,8 +210,8 @@ function compileCondition(cond: Condition, locals: LocalEnv, functionIndexMap: F
             switch (cond.op) {
                 case "==": return i32.eq(left, right);
                 case "!=": return i32.ne(left, right);
-                case ">":  return i32.gt_s(left, right);
-                case "<":  return i32.lt_s(left, right);
+                case ">": return i32.gt_s(left, right);
+                case "<": return i32.lt_s(left, right);
                 case ">=": return i32.ge_s(left, right);
                 case "<=": return i32.le_s(left, right);
                 default:
@@ -253,7 +253,7 @@ function compileCondition(cond: Condition, locals: LocalEnv, functionIndexMap: F
 
         default: {
             const _never: never = cond as never;
-            throw new Error(`Unknown condition node ${( _never as any).kind}`);
+            throw new Error(`Unknown condition node ${(_never as any).kind}`);
         }
     }
 }
@@ -312,7 +312,7 @@ function compileStatement(stmt: Statement, locals: LocalEnv, functionIndexMap: F
 
         default: {
             const _never: never = stmt as never;
-            throw new Error(`Unknown statement node ${( _never as any).type}`);
+            throw new Error(`Unknown statement node ${(_never as any).type}`);
         }
     }
 
