@@ -1,12 +1,13 @@
 import { desiredMark } from '../../desiredMark.json';
 import { addIntGroup, testRe } from '../../lab08/tests/testFilesInFolder';
 import { DesiredMark } from '../../mark';
-import { 
-    readFileSync, 
-    readdirSync  } from 'fs';
-import { join as pathJoin, parse as pathParse} from 'path';
+import {
+    readFileSync,
+    readdirSync
+} from 'fs';
+import { join as pathJoin, parse as pathParse } from 'path';
 
-export function testFilesInFolderAsync(folder: string, parseFunc: (name: string, source: string)=>Promise<any>) {
+export function testFilesInFolderAsync(folder: string, parseFunc: (name: string, source: string) => Promise<any>) {
     let files = readdirSync(folder, { withFileTypes: true, recursive: true });
     for (const file of files) {
         const basePath = file.parentPath ?? folder;
@@ -18,7 +19,7 @@ export function testFilesInFolderAsync(folder: string, parseFunc: (name: string,
             const sample = readFileSync(filePathString, 'utf-8');
             const m = filePath.base.match(testRe);
 
-            const processSample = async()=>parseFunc(filePath.name, sample);
+            const processSample = async () => parseFunc(filePath.name, sample);
             if (m && m.groups) {
                 if (m.groups.mark as DesiredMark > desiredMark)
                     test.skip(name, () => { });
@@ -29,11 +30,13 @@ export function testFilesInFolderAsync(folder: string, parseFunc: (name: string,
                     addIntGroup(e, m.groups, 'startCol');
                     addIntGroup(e, m.groups, 'endLine');
                     addIntGroup(e, m.groups, 'endCol');
-                    test(name, async () => { await expect(processSample()).rejects.toThrow(
-                        expect.objectContaining(e))});
+                    test(name, async () => {
+                        await expect(processSample()).rejects.toThrow(
+                            expect.objectContaining(e))
+                    });
                 }
                 else // no error specified in the file name
-                    test(name, async () => { await expect(processSample()).resolves.not.toThrow()});
+                    test(name, async () => { await expect(processSample()).resolves.not.toThrow() });
             }
         }
     }
