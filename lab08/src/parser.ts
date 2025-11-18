@@ -348,23 +348,21 @@ export const getFunnyAst = {
         const functions = funcs.children.map(
             (f: any) => f.parse() as ast.FunctionDef
         );
-        const mod: ast.Module = {
+        return {
             type: "module",
             functions,
-        };
-        return mod;
+        } as ast.Module;
     },
 
     Function(name, _lp, params, _rp, _preOpt, retSpec, _postOpt, usesOpt, stmt) {
-        const fun: ast.FunctionDef = {
+        return {
             type: "fun",
             name: name.sourceString,
             parameters: params.parse() as ast.ParameterDef[],
             returns: retSpec.parse() as ast.ParameterDef[],
             locals: parseOptional<ast.ParameterDef[]>(usesOpt, []),
             body: stmt.parse() as ast.Statement,
-        };
-        return fun;
+        } as ast.FunctionDef;
     },
 
     UsesSpec(_uses, params) {
@@ -388,11 +386,10 @@ export const getFunnyAst = {
     },
 
     Param(name, _colon, _type) {
-        const p: ast.ParameterDef = {
+        return {
             type: "param",
             name: name.sourceString,
-        };
-        return p;
+        } as ast.ParameterDef;
     },
 
     Type_array(_int, _brackets) {
@@ -624,8 +621,7 @@ export const getFunnyAst = {
 
     Quantifier(qTok, _lp, paramNode, _bar, body, _rp) {
         const quant = qTok.sourceString as "forall" | "exists";
-        const identNode = paramNode.child(0);
-        const typeNode = paramNode.child(2);
+        const { identNode, _s, typeNode } = paramNode;
         const varName = identNode.sourceString;
         const varType = typeNode.parse() as "int" | "int[]";
         return {
