@@ -46,6 +46,7 @@ export interface FunctionDef {
 export interface ParameterDef {
     type: "param";
     name: string;
+    typeName: "int" | "int[]";
 }
 
 export type Statement =

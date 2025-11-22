@@ -20,7 +20,7 @@ type PosInfo = {
     endCol?: number;
 };
 
-function fail(code: ErrorCode, message: string, pos: PosInfo = {}): never {
+export function fail(code: ErrorCode, message: string, pos: PosInfo = {}): never {
     const { startLine, startCol, endLine, endCol } = pos;
     throw new FunnyError(message, code, startLine, startCol, endCol, endLine);
 }
@@ -69,13 +69,13 @@ function ensureDeclared(
     }
 }
 
-function parseOptional<T>(node: any, fallback: T): T {
+export function parseOptional<T>(node: any, fallback: T): T {
     return node.children.length > 0
         ? (node.child(0).parse() as T)
         : fallback;
 }
 
-function checkModule(mod: ast.Module): void {
+export function checkModule(mod: ast.Module): void {
     const funEnv: FunEnv = Object.create(null);
 
     for (const fn of mod.functions) {
@@ -385,10 +385,11 @@ export const getFunnyAst = {
         return collectList<ast.ParameterDef>(list);
     },
 
-    Param(name, _colon, _type) {
+    Param(name, _colon, type) {
         return {
             type: "param",
             name: name.sourceString,
+            typeName: type.sourceString,
         } as ast.ParameterDef;
     },
 
@@ -621,9 +622,9 @@ export const getFunnyAst = {
 
     Quantifier(qTok, _lp, paramNode, _bar, body, _rp) {
         const quant = qTok.sourceString as "forall" | "exists";
-        const { identNode, _s, typeNode } = paramNode;
-        const varName = identNode.sourceString;
-        const varType = typeNode.parse() as "int" | "int[]";
+        const param = paramNode.parse() as ast.ParameterDef;
+        const varName = param.name;
+        const varType = param.typeName;
         return {
             kind: "quantifier",
             quant,
