@@ -15,6 +15,7 @@ export const enum ErrorCode {
     AccessUndeclaredArray = 'E_ACCESS_UNDECLARED_ARRAY',
     ArrayIndexMultiValue = 'E_ARRAY_INDEX_MULTI_VALUE',
     ComparisonMultiValue = 'E_COMPARISON_MULTI_VALUE',
+    VerificationError = 'E_VERIFICATION_ERROR',
 }
 
 export class FunnyError extends Error {

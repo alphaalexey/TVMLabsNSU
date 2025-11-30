@@ -5,15 +5,52 @@ import grammar, { FunnierActionDict } from './funnier.ohm-bundle';
 import { AnnotatedModule, AnnotatedFunctionDef } from './funnier';
 import { ErrorCode, Predicate, checkModule, fail, getFunnyAst, parseOptional } from '../../lab08';
 
+type SourceRange = {
+    startLine: number;
+    startCol: number;
+    endLine: number;
+    endCol: number;
+};
+
+function getLocFromNode(node: any): SourceRange | undefined {
+    const src = node.source;
+    if (!src || typeof src.getLineAndColumn !== 'function') {
+        return undefined;
+    }
+    const start = src.getLineAndColumn(src.startIdx);
+    const end = src.getLineAndColumn(src.endIdx);
+    return {
+        startLine: start.lineNum,
+        startCol: start.colNum,
+        endLine: end.lineNum,
+        endCol: end.colNum,
+    };
+}
+
+function attachLoc<T extends object>(value: T, node: any): T {
+    const loc = getLocFromNode(node);
+    if (loc) {
+        (value as any).loc = loc;
+    }
+    return value;
+}
+
 const getFunnierAst = {
     ...getFunnyAst,
 
     PreSpec(_requires, pred) {
-        return pred.parse();
+        const p = pred.parse() as Predicate;
+        return attachLoc(p, pred);
     },
 
     PostSpec(_ensures, pred) {
-        return pred.parse();
+        const p = pred.parse() as Predicate;
+        return attachLoc(p, pred);
+    },
+
+    InvariantSpec(_inv, pred) {
+        const p = pred.parse() as Predicate;
+        return attachLoc(p, pred);
     },
 
     Function(name, _lp, params, _rp, preOpt, retSpec, postOpt, usesOpt, stmt) {
