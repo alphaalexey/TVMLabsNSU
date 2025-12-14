@@ -31,8 +31,6 @@ export function flushZ3() {
     z3 = undefined as any;
 }
 
-type IntExpr = Arith;
-type BoolExpr = Bool;
 type AssignExpr = Extract<Statement, { type: "assign" }>;
 type FuncCallExpr = Extract<Expr, { type: "funccall" }>;
 
@@ -177,11 +175,6 @@ class FunctionVerifier {
         );
     }
 
-    private substAll(vcs: Predicate[], subs: Map<string, Expr>): Predicate[] {
-        if (subs.size === 0) return vcs;
-        return vcs.map(vc => this.substPredicate(vc, subs));
-    }
-
     private wpStatement(
         f: AnnotatedFunctionDef,
         stmt: Statement,
@@ -206,7 +199,8 @@ class FunctionVerifier {
                     current = r.pre;
 
                     if (s.type === "assign") {
-                        allVcs = this.substAll(allVcs, this.subsFromAssign(s));
+                        const subs = this.subsFromAssign(s);
+                        if (subs.size) allVcs = allVcs.map(vc => this.substPredicate(vc, subs));
                     }
 
                     allVcs.push(...r.vcs);
@@ -463,7 +457,7 @@ class FunctionVerifier {
         return scope.get(name) ?? this.ctx.Int.const(this.varName(f, name));
     }
 
-    private exprToZ3(f: AnnotatedFunctionDef, expr: Expr, scope: Map<string, any> = new Map()): IntExpr {
+    private exprToZ3(f: AnnotatedFunctionDef, expr: Expr, scope: Map<string, any> = new Map()): Arith {
         expr = this.inlineExpr(expr);
         switch (expr.type) {
             case "num":
@@ -494,7 +488,7 @@ class FunctionVerifier {
         }
     }
 
-    private predicateToZ3(f: AnnotatedFunctionDef, pred: Predicate, scope: Map<string, any> = new Map()): BoolExpr {
+    private predicateToZ3(f: AnnotatedFunctionDef, pred: Predicate, scope: Map<string, any> = new Map()): Bool {
         switch (pred.kind) {
             case "true": return this.ctx.Bool.val(true);
             case "false": return this.ctx.Bool.val(false);
@@ -551,9 +545,7 @@ class FunctionVerifier {
             seen.add(key);
 
             const callee = this.funMap.get(c.name);
-            if (!callee) return;
-            if (callee.returns.length !== 1) return;
-            if (!callee.post) return;
+            if (!callee?.post || callee.returns.length !== 1) return;
 
             const pre = callee.pre ?? TRUE_PRED;
             const post = callee.post;
@@ -574,13 +566,15 @@ class FunctionVerifier {
     private async prove(vc: Predicate, f: AnnotatedFunctionDef): Promise<void> {
         const solver = new this.ctx.Solver();
         const scope = new Map<string, any>();
-        const guarded = this.guardCallPreconditions(vc);
-        for (const a of this.contractInstancesForVC(guarded)) {
-            solver.add(this.predicateToZ3(f, a, scope));
-        }
 
-        const formula = this.predicateToZ3(f, guarded, scope);
-        solver.add(this.ctx.Not(formula));
+        const guarded = this.guardCallPreconditions(vc);
+
+        this.contractInstancesForVC(guarded).forEach(a =>
+            solver.add(this.predicateToZ3(f, a, scope))
+        );
+
+        solver.add(this.ctx.Not(this.predicateToZ3(f, guarded, scope)));
+
         let res: string;
         try {
             res = await solver.check();
