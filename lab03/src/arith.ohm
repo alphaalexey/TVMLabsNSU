@@ -19,7 +19,7 @@ Arithmetic {
         | "-" Atom      -- unary_minus
         | "(" Expr ")"  -- parens
 
-    variable = letter alnum*
+    variable = (letter | "_") (alnum | "_")*
 
     nonZeroDigit = "1".."9"
 
