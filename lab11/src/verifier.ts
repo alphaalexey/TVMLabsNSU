@@ -42,6 +42,28 @@ type DefinitionalSpec = {
 const TRUE_PRED: Predicate = { kind: "true" };
 const FALSE_PRED: Predicate = { kind: "false" };
 
+type SourceRange = {
+    startLine?: number;
+    startCol?: number;
+    endLine?: number;
+    endCol?: number;
+};
+
+function getPos(x: any): SourceRange | undefined {
+    return x?.blame ?? x?.loc;
+}
+
+function copyMeta(to: any, from: any) {
+    if (!to || !from) return;
+    if (from.loc && !to.loc) to.loc = from.loc;
+    if (from.blame && !to.blame) to.blame = from.blame;
+}
+
+function setBlame<T extends object>(obj: T, pos?: SourceRange): T {
+    if (pos) (obj as any).blame = pos;
+    return obj;
+}
+
 class FunctionVerifier {
     private readonly ctx: Context;
     private readonly module: AnnotatedModule;
@@ -89,10 +111,14 @@ class FunctionVerifier {
         const post = f.post ?? TRUE_PRED;
         const pre = f.pre ?? TRUE_PRED;
 
+        const postPos = getPos(post);
+
         const { pre: wpPre, vcs } = this.wpStatement(f, f.body, post);
 
         for (const vc of [wpPre, ...vcs]) {
-            await this.prove(this.makeImplies(pre, vc), f);
+            const goal = this.makeImplies(pre, vc);
+            setBlame(goal, getPos(vc) ?? postPos);
+            await this.prove(goal, f);
         }
     }
 
@@ -142,28 +168,56 @@ class FunctionVerifier {
     }
 
     private guardCallPreconditions(pred: Predicate): Predicate {
+        const keep = <T extends Predicate>(out: T): T => {
+            copyMeta(out, pred);
+            return out;
+        };
+
         switch (pred.kind) {
             case "comparison": {
                 let guarded: Predicate = pred;
-                for (const side of [pred.left, pred.right]) {
-                    this.forEachCallInExpr(side, (c) => {
-                        const callee = this.funMap.get(c.name);
-                        if (!callee) return;
-                        const pre = callee.pre ?? TRUE_PRED;
-                        guarded = this.makeAnd(this.substPredicate(pre, this.subsForCall(callee, c)), guarded);
-                    });
-                }
+
+                this.forEachCallInExpr(pred.left, (c) => {
+                    const callee = this.funMap.get(c.name);
+                    const pre = callee?.pre ?? TRUE_PRED;
+                    guarded = this.makeAnd(this.substPredicate(pre, this.subsForCall(callee!, c)), guarded);
+                });
+                this.forEachCallInExpr(pred.right, (c) => {
+                    const callee = this.funMap.get(c.name);
+                    const pre = callee?.pre ?? TRUE_PRED;
+                    guarded = this.makeAnd(this.substPredicate(pre, this.subsForCall(callee!, c)), guarded);
+                });
+
+                copyMeta(guarded, pred);
                 return guarded;
             }
+
             case "and":
             case "or":
-                return { kind: pred.kind, left: this.guardCallPreconditions(pred.left), right: this.guardCallPreconditions(pred.right) };
+                return keep({
+                    kind: pred.kind,
+                    left: this.guardCallPreconditions(pred.left),
+                    right: this.guardCallPreconditions(pred.right),
+                });
+
             case "not":
-                return { kind: "not", predicate: this.guardCallPreconditions(pred.predicate) };
-            case "paren":
-                return this.guardCallPreconditions(pred.inner);
+                return keep({
+                    kind: "not",
+                    predicate: this.guardCallPreconditions(pred.predicate),
+                });
+
+            case "paren": {
+                const inner = this.guardCallPreconditions(pred.inner);
+                copyMeta(inner, pred);
+                return inner;
+            }
+
             case "quantifier":
-                return { ...pred, body: this.guardCallPreconditions(pred.body) };
+                return {
+                    ...(pred),
+                    body: this.guardCallPreconditions(pred.body),
+                } as Predicate;
+
             default:
                 return pred;
         }
@@ -251,6 +305,13 @@ class FunctionVerifier {
                     this.makeAnd(inv, this.makeNot(condPred)),
                     post
                 );
+
+                const invPos = getPos(inv);
+                const postPos = getPos(post);
+
+                setBlame(vcPreserve, invPos);
+                setBlame(vcOneStepExit, invPos);
+                setBlame(vcExit, postPos ?? invPos);
 
                 return {
                     pre: inv,
@@ -360,6 +421,11 @@ class FunctionVerifier {
         bound: Set<string>,
         mapExpr: (e: Expr, bound: Set<string>) => Expr
     ): Predicate {
+        const keep = <T extends Predicate>(out: T): T => {
+            copyMeta(out, pred);
+            return out;
+        };
+
         switch (pred.kind) {
             case "true":
             case "false":
@@ -367,40 +433,44 @@ class FunctionVerifier {
                 return pred;
 
             case "comparison":
-                return {
+                return keep({
                     kind: "comparison",
                     op: pred.op,
                     left: mapExpr(pred.left, bound),
                     right: mapExpr(pred.right, bound),
-                };
+                });
 
             case "not":
-                return {
+                return keep({
                     kind: "not",
                     predicate: this.rewritePredicate(pred.predicate, bound, mapExpr),
-                };
+                });
 
             case "and":
             case "or":
-                return {
+                return keep({
                     kind: pred.kind,
                     left: this.rewritePredicate(pred.left, bound, mapExpr),
                     right: this.rewritePredicate(pred.right, bound, mapExpr),
-                };
+                });
 
-            case "paren":
-                return this.rewritePredicate(pred.inner, bound, mapExpr);
+            case "paren": {
+                const inner = this.rewritePredicate(pred.inner, bound, mapExpr);
+                copyMeta(inner, pred);
+                return inner;
+            }
 
             case "quantifier": {
                 const innerBound = new Set(bound);
                 innerBound.add(pred.varName);
-                return {
+
+                return keep({
                     kind: "quantifier",
                     quant: pred.quant,
                     varName: pred.varName,
                     varType: pred.varType,
                     body: this.rewritePredicate(pred.body, innerBound, mapExpr),
-                };
+                });
             }
         }
     }
@@ -563,6 +633,58 @@ class FunctionVerifier {
         return inst;
     }
 
+    private pickViolationPos(f: AnnotatedFunctionDef, model: Model, pred: Predicate): SourceRange | undefined {
+        let best: { pos: SourceRange; span: number; depth: number } | undefined;
+
+        const spanOf = (pos: SourceRange): number => {
+            const sl = pos.startLine ?? 0;
+            const sc = pos.startCol ?? 0;
+            const el = pos.endLine ?? sl;
+            const ec = pos.endCol ?? sc;
+            return Math.max(0, el - sl) * 1_000_000 + Math.max(0, ec - sc);
+        };
+
+        const isFalseInModel = (p: Predicate): boolean => {
+            try {
+                const z3p = this.predicateToZ3(f, p, new Map());
+                const v: any = model.eval(z3p, true);
+                return v?.toString?.() === "false";
+            } catch {
+                return false;
+            }
+        };
+
+        const visit = (p: Predicate, depth: number) => {
+            const pos = getPos(p);
+            if (pos && isFalseInModel(p)) {
+                const span = spanOf(pos);
+                if (!best || span < best.span || (span === best.span && depth > best.depth)) {
+                    best = { pos, span, depth };
+                }
+            }
+
+            switch (p.kind) {
+                case "not":
+                    visit(p.predicate, depth + 1);
+                    break;
+                case "and":
+                case "or":
+                    visit(p.left, depth + 1);
+                    visit(p.right, depth + 1);
+                    break;
+                case "paren":
+                    visit(p.inner, depth + 1);
+                    break;
+                case "quantifier":
+                    visit(p.body, depth + 1);
+                    break;
+            }
+        };
+
+        visit(pred, 0);
+        return best?.pos;
+    }
+
     private async prove(vc: Predicate, f: AnnotatedFunctionDef): Promise<void> {
         const solver = new this.ctx.Solver();
         const scope = new Map<string, any>();
@@ -580,18 +702,36 @@ class FunctionVerifier {
             res = await solver.check();
         } catch (e: any) {
             const msg = e instanceof Error ? e.message : String(e);
-            fail(ErrorCode.VerificationError, `Z3 error while verifying function "${f.name}": ${msg}`);
+            fail(
+                ErrorCode.VerificationError,
+                `Z3 error while verifying function "${f.name}": ${msg}`,
+                getPos(vc)
+            );
         }
 
         if (res === "unsat") return;
 
         if (res === "unknown") {
-            fail(ErrorCode.VerificationError, `Z3 returned "unknown" while verifying function "${f.name}".`);
+            fail(
+                ErrorCode.VerificationError,
+                `Z3 returned "unknown" while verifying function "${f.name}".`,
+                getPos(vc)
+            );
         }
 
         const model: Model = solver.model();
         const msg = printFuncCall(this.ctx, f, model);
-        fail(ErrorCode.VerificationError, `Verification failed for function "${f.name}".\n${msg}`);
+
+        const pos =
+            this.pickViolationPos(f, model, guarded) ??
+            getPos(guarded) ??
+            getPos(vc);
+
+        fail(
+            ErrorCode.VerificationError,
+            `Verification failed for function "${f.name}".\n${msg}`,
+            pos
+        );
     }
 }
 

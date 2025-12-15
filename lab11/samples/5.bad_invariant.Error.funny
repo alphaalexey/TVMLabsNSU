@@ -1,0 +1,14 @@
+bad_invariant(n:int)
+requires n >= 0
+returns r:int
+ensures r == n
+uses i:int
+{
+  i = 0;
+  r = 0;
+
+  while (i < n) invariant r == i {
+    i = i + 1;
+    r = r + 2;   // <- инвариант r == i больше не сохраняется
+  }
+}

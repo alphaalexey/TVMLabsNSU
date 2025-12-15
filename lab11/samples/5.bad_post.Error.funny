@@ -1,0 +1,6 @@
+bad_post(x:int)
+returns r:int
+ensures r > x
+{
+  r = x;         // <- нарушает ensures r > x
+}
