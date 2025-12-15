@@ -18,6 +18,22 @@ export const enum ErrorCode {
     VerificationError = 'E_VERIFICATION_ERROR',
 }
 
+function formatPos(
+    startLine: number | undefined,
+    startCol: number | undefined,
+    endLine: number | undefined,
+    endCol: number | undefined): string | undefined {
+    if (startLine == null || startCol == null) return undefined;
+
+    const el = endLine ?? startLine;
+    const ec = endCol ?? startCol;
+    if (el === startLine && ec === startCol) {
+        return `${startLine}:${startCol}`;
+    }
+
+    return `${startLine}:${startCol}-${el}:${ec}`;
+}
+
 export class FunnyError extends Error {
     constructor(
         message: string,
@@ -26,7 +42,9 @@ export class FunnyError extends Error {
         public readonly startCol?: number,
         public readonly endCol?: number,
         public readonly endLine?: number) {
-        super(message);
+        const pretty = formatPos(startLine, startCol, endLine, endCol);
+        const msg = pretty ? `${message}\n@ ${pretty}` : message;
+        super(msg);
     }
 }
 

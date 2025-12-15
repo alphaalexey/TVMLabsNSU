@@ -25,7 +25,7 @@ export function testFilesInFolderAsync(folder: string, parseFunc: (name: string,
                     test.skip(name, () => { });
 
                 else if (m.groups.error) {
-                    var e = {};
+                    let e = {};
                     addIntGroup(e, m.groups, 'startLine');
                     addIntGroup(e, m.groups, 'startCol');
                     addIntGroup(e, m.groups, 'endLine');

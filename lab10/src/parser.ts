@@ -1,4 +1,4 @@
-import { MatchResult, Semantics } from 'ohm-js';
+import { Interval, MatchResult, Semantics } from 'ohm-js';
 
 import grammar, { FunnierActionDict } from './funnier.ohm-bundle';
 
@@ -12,13 +12,11 @@ type SourceRange = {
     endCol: number;
 };
 
-function getLocFromNode(node: any): SourceRange | undefined {
-    const src = node.source;
-    if (!src || typeof src.getLineAndColumn !== 'function') {
-        return undefined;
-    }
-    const start = src.getLineAndColumn(src.startIdx);
-    const end = src.getLineAndColumn(src.endIdx);
+function getLocFromNode(node: any): SourceRange {
+    const interval = node.source as Interval;
+    const start = interval.getLineAndColumn();
+    const endInterval = interval.collapsedRight();
+    const end = endInterval.getLineAndColumn();
     return {
         startLine: start.lineNum,
         startCol: start.colNum,
