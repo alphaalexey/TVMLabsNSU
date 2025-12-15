@@ -1,11 +1,11 @@
 import { desiredMark } from "../../desiredMark.json";
 import { test as testJs } from '@jest/globals';
 export type DesiredMark = 3|4|5|"5+";
-
+export const toRank = (m: DesiredMark): number => (m === "5+" ? 6 : m);
 
 export function test<T extends any[], R>(name: string, testMark: DesiredMark, fn:(...args:T)=>R, expected: ResultOrException<R>, ...args:T): void
 {
-    if (desiredMark >= testMark)
+    if (toRank(desiredMark as DesiredMark) >= toRank(testMark))
     {
         if(typeof expected === "function") 
         {

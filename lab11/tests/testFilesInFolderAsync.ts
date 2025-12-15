@@ -1,6 +1,6 @@
 import { desiredMark } from '../../desiredMark.json';
 import { addIntGroup, testRe } from '../../lab08/tests/testFilesInFolder';
-import { DesiredMark } from '../../mark';
+import { DesiredMark, toRank } from '../../mark';
 import {
     readFileSync,
     readdirSync
@@ -21,7 +21,7 @@ export function testFilesInFolderAsync(folder: string, parseFunc: (name: string,
 
             const processSample = async () => parseFunc(filePath.name, sample);
             if (m && m.groups) {
-                if (m.groups.mark as DesiredMark > desiredMark)
+                if (toRank(m.groups.mark as DesiredMark) > toRank(desiredMark as DesiredMark))
                     test.skip(name, () => { });
 
                 else if (m.groups.error) {

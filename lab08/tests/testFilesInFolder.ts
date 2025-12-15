@@ -1,5 +1,5 @@
 import { desiredMark } from '../../desiredMark.json';
-import { DesiredMark } from '../../mark';
+import { DesiredMark, toRank } from '../../mark';
 import {
     readFileSync,
     readdirSync
@@ -26,7 +26,7 @@ export function testFilesInFolder(folder: string, parseFunc: (source: string) =>
             const sample = readFileSync(filePathString, 'utf-8');
             const m = filePath.base.match(testRe);
             if (m && m.groups) {
-                if (m.groups.mark as DesiredMark > desiredMark)
+                if (toRank(m.groups.mark as DesiredMark) > toRank(desiredMark as DesiredMark))
                     test.skip(name, () => { });
 
                 else if (m.groups.error) {
