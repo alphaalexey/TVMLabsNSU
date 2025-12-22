@@ -3,14 +3,7 @@ import { Interval, MatchResult, Semantics } from 'ohm-js';
 import grammar, { FunnierActionDict } from './funnier.ohm-bundle';
 
 import { AnnotatedModule, AnnotatedFunctionDef } from './funnier';
-import { ErrorCode, Predicate, checkModule, fail, getFunnyAst, parseOptional } from '../../lab08';
-
-type SourceRange = {
-    startLine: number;
-    startCol: number;
-    endLine: number;
-    endCol: number;
-};
+import { ErrorCode, Predicate, SourceRange, checkModule, fail, getFunnyAst, getLocFromMatch, parseOptional } from '../../lab08';
 
 function getLocFromNode(node: any): SourceRange {
     const interval = node.source as Interval;
@@ -75,19 +68,10 @@ export function parseFunnier(source: string): AnnotatedModule {
     const match: MatchResult = grammar.Funnier.match(source, "Module");
 
     if (match.failed()) {
-        const m: any = match;
-        const pos =
-            typeof m.getRightmostFailurePosition === "function"
-                ? m.getRightmostFailurePosition()
-                : null;
-
         const message: string =
-            m.message ?? "Syntax error in Funny module.";
+            match.message ?? "Syntax error in Funny module.";
 
-        fail(ErrorCode.ParseError, message, {
-            startLine: pos?.lineNum,
-            startCol: pos?.colNum,
-        });
+        fail(ErrorCode.ParseError, message, getLocFromMatch(match));
     }
 
     const mod = (semantics as FunnySemanticsExt)(match).parse();

@@ -1,6 +1,6 @@
 import { getExprAst } from '../../lab04';
 import * as ast from './funny';
-import { ErrorCode, FunnyError } from './funny';
+import { ErrorCode, FunnyError, getLocFromMatch } from './funny';
 
 import grammar, { FunnyActionDict } from './funny.ohm-bundle';
 
@@ -657,19 +657,10 @@ export function parseFunny(source: string): ast.Module {
     const match: MatchResult = grammar.Funny.match(source, "Module");
 
     if (match.failed()) {
-        const m: any = match;
-        const pos =
-            typeof m.getRightmostFailurePosition === "function"
-                ? m.getRightmostFailurePosition()
-                : null;
-
         const message: string =
-            m.message ?? "Syntax error in Funny module.";
+            match.message ?? "Syntax error in Funny module.";
 
-        fail(ErrorCode.ParseError, message, {
-            startLine: pos?.lineNum,
-            startCol: pos?.colNum,
-        });
+        fail(ErrorCode.ParseError, message, getLocFromMatch(match));
     }
 
     const mod = (semantics as FunnySemanticsExt)(match).parse();

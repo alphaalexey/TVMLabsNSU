@@ -1,4 +1,5 @@
 import * as arith from "../../lab04";
+import { MatchResult } from 'ohm-js';
 
 export const enum ErrorCode {
     ParseError = 'E_PARSE_ERROR',
@@ -18,6 +19,13 @@ export const enum ErrorCode {
     VerificationError = 'E_VERIFICATION_ERROR',
 }
 
+export type SourceRange = {
+    startLine?: number;
+    startCol?: number;
+    endLine?: number;
+    endCol?: number;
+};
+
 function formatPos(
     startLine: number | undefined,
     startCol: number | undefined,
@@ -32,6 +40,15 @@ function formatPos(
     }
 
     return `${startLine}:${startCol}-${el}:${ec}`;
+}
+
+export function getLocFromMatch(node: MatchResult): SourceRange {
+    const interval = node.getInterval();
+    const start = interval.getLineAndColumn();
+    return {
+        startLine: start.lineNum,
+        startCol: start.colNum,
+    };
 }
 
 export class FunnyError extends Error {
